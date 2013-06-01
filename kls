@@ -76,7 +76,7 @@ sub layouts {
     my $layouts_file = option 'layouts';
 
     if (not -f $layouts_file) {
-        message("kls error", "${layouts_file} is missing");
+        message("KLS", "ERROR: ${layouts_file} is missing");
         exit 1;
     }
     open my $fh, '<', $layouts_file;
@@ -161,8 +161,7 @@ if ($new_layout) {
 
     system (@cmd);
 
-    my $summary = "Keyboard layout changed to $new_layout->{name}";
-    message($summary, $summary . "\n" . join(' ', @cmd));
+    message("KLS", "Layout changed to $new_layout->{name}\n" . join(' ', @cmd));
 } else {
-    message("kls error", "There is no layout $new_index");
+    message("KLS", "ERROR: There is no layout $new_index");
 }
