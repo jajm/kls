@@ -1,0 +1,168 @@
+#!/usr/bin/perl
+
+# Copyright 2013 Julian Maurice
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>
+
+use Modern::Perl;
+use File::Basename;
+use Getopt::Long qw(:config no_auto_abbrev gnu_getopt);
+
+sub usage {
+    my $name = basename($0);
+<<USAGE
+$name, a simple keyboard layout switcher
+
+Usage:
+    $name [options] ACTION
+    $name -h
+
+Options:
+    -l FILE
+    --layouts FILE
+        Where are defined layouts. Default: \$HOME/.config/kls/layouts
+
+    -h
+    --help
+        Display this help message
+
+Actions:
+    next    Switch to next layout
+    prev    Switch to previous layout
+    N       Switch to N-th layout
+USAGE
+}
+
+sub message {
+    my ($title, $msg) = @_;
+    system("notify-send", $title, $msg);
+    say "$title: $msg";
+}
+
+sub option {
+    state $options;
+
+    if (not defined $options) {
+        my %defaults = (
+            layouts => "$ENV{HOME}/.config/kls/layouts",
+        );
+        $options = {};
+        GetOptions($options,
+            'layouts|l=s',
+        ) or die usage;
+
+        foreach (keys %defaults) {
+            unless (defined $options->{$_}) {
+                $options->{$_} = $defaults{$_};
+            }
+        }
+    }
+
+    return $options->{$_[0]};
+}
+
+sub layouts {
+    my $layouts_file = option 'layouts';
+
+    if (not -f $layouts_file) {
+        message("kls error", "${layouts_file} is missing");
+        exit 1;
+    }
+    open my $fh, '<', $layouts_file;
+    my @layouts;
+    while (my $line = <$fh>) {
+        chomp $line;
+        if ($line !~ /^#/) {
+            my ($name, $layout, $variant, $options) = split /\t/, $line;
+            push @layouts, {
+                name => $name,
+                layout => $layout,
+                variant => $variant || '',
+                options => [split / /, ($options || '')],
+            };
+        }
+    }
+    return @layouts;
+}
+
+my @setxkbmap_query_output = qx/setxkbmap -query/;
+
+my $current_layout = {};
+foreach (@setxkbmap_query_output) {
+    chomp $_;
+    if ($_ =~ /^(.*?):\s*(.*)/) {
+        my ($key, $value) = ($1, $2);
+        $current_layout->{$key} = $value;
+    }
+}
+$current_layout->{variant} //= '';
+if ($current_layout->{options}) {
+    $current_layout->{options} = [split /,/, $current_layout->{options}];
+} else {
+    $current_layout->{options} = [];
+}
+
+my $current_index;
+my $i = -1;
+my @layouts = layouts;
+foreach my $layout (@layouts) {
+    $i++;
+    next if $layout->{layout} ne $current_layout->{layout};
+    next if $layout->{variant} ne $current_layout->{variant};
+    my @options = sort @{$layout->{options}};
+    my @current_options = sort @{$current_layout->{options}};
+    next unless (@options ~~ @current_options);
+    $current_index = $i;
+}
+
+my $action = $ARGV[0];
+die usage unless defined $action;
+my $new_index;
+given ($action) {
+    when ('next') {
+        $new_index = (defined $current_index and $current_index < @layouts - 1)
+            ? $current_index + 1
+            : 0;
+    }
+    when ('prev') {
+        $new_index = (defined $current_index and $current_index > 0)
+            ? $current_index - 1
+            : $#layouts;
+    }
+    when (/^\d+$/) {
+        $new_index = $action;
+    }
+    default {
+        die usage;
+    }
+}
+
+my $new_layout = $layouts[$new_index];
+
+if ($new_layout) {
+    my @cmd = ('setxkbmap');
+    push @cmd, '-layout', $new_layout->{layout};
+    push @cmd, '-variant', $new_layout->{variant} if $new_layout->{variant};
+    push @cmd, '-option';
+    foreach my $option (@{$new_layout->{options}}) {
+        push @cmd, '-option', $option;
+    }
+
+    system (@cmd);
+
+    my $summary = "Keyboard layout changed to $new_layout->{name}";
+    message($summary, $summary . "\n" . join(' ', @cmd));
+} else {
+    message("kls error", "There is no layout $new_index");
+}

@@ -1,0 +1,4 @@
+# Name	Layout	Variant	Options
+Azerty	fr		lv3:ralt_switch compose:rwin terminate:ctrl_alt_bksp
+Programmer Dvorak	us	dvp	compose:102 numpad:shift3 kpdl:semi keypad:atm caps:shift lv3:ralt_switch
+#US International	us	intl
