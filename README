@@ -1,0 +1,4 @@
+1. Define your layouts in $HOME/.config/kls/layouts (see layouts.sample)
+2. Add kls to your PATH
+3. Run `kls next` or `kls prev` several times to cycle through the layouts
+   Or run `kls N` to select a particular layout (N is the position of layout in the layouts file - starts at 0)
